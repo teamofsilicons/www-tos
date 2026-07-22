@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
+  --font-sans: var(--font-aktiv-grotesk), system-ui, sans-serif;
+  --font-pixel-square: var(--font-geist-pixel-square);
+  --font-pixel-grid: var(--font-geist-pixel-grid);
+
+  /* Color utilities */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ink: var(--ink);
+  --color-border: var(--border);
+  --color-muted-fg: var(--muted-fg);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #fffdf9;
+  --foreground: #1e1e1c;
+  --ink: #181818;
+  --border: #e7e3d8;
+  --muted-fg: #6e6b63;
 }
 
+/* ─── Base ──────────────────────────────────────────────────────────── */
+
+html {
+  font-size: 16px;
+}
+
+html,
 body {
+  height: 100%;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--ink);
+  color: var(--background);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a[href] {
+  cursor: pointer;
+}
+
+/* ─── Typography helpers ────────────────────────────────────────────── */
+
+/* Geist Pixel: display/style font, two shape variants */
+.font-pixel-square {
+  font-family: var(--font-pixel-square), monospace;
+}
+.font-pixel-grid {
+  font-family: var(--font-pixel-grid), monospace;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────────────────── */
+
+* {
+  border-color: var(--border);
+  scrollbar-color: #b5afa3 #efebe2;
+  scrollbar-width: thin;
 }
