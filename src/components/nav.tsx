@@ -142,7 +142,7 @@ export function Nav() {
 
           <div className={pillShellClass}>
             <Link
-              href="/#contact"
+              href="mailto:hello@teamofsilicons.com"
               className={`${pillLinkClass} text-foreground hover:bg-[#1F5CB1] hover:text-white`}
             >
               Book a call

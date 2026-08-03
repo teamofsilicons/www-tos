@@ -24,13 +24,13 @@ export function Hero() {
 
         <div className="flex flex-col items-center gap-3 sm:flex-row">
           <Link
-            href="/#contact"
+            href="mailto:hello@teamofsilicons.com"
             className="inline-flex w-full items-center justify-center rounded-md bg-[#1F5CB1] px-6 py-2.5 text-base font-normal text-white transition-opacity hover:opacity-90 sm:w-auto"
           >
             Book a call
           </Link>
           <Link
-            href="#timelines"
+            href="#the-shift"
             className="inline-flex w-full items-center justify-center rounded-md border border-border px-6 py-2.5 text-base text-foreground transition-colors hover:bg-[#EDE8E0]/50 sm:w-auto"
           >
             See how it works

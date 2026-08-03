@@ -60,7 +60,9 @@ export function ClientsBar() {
   return (
     <section className="flex min-h-[40vh] flex-col justify-center border-t-[0.5px] border-border px-8 pb-16 pt-16">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
-        <h2 className="text-lg font-medium tracking-tight">Deployed at</h2>
+        <h2 className="font-pixel-square text-lg uppercase tracking-tight">
+          Deployed at
+        </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {clients.map((client) => (
             <LogoTile key={client.name} client={client} />
