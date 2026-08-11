@@ -1,274 +1,404 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
 import {
   BOOKLET_PAGE_COUNT,
   bookletPageSrc,
   bookletSheets,
 } from "@/lib/booklet-pages";
 
-gsap.registerPlugin(ScrollTrigger);
-
-const LEAD_IN = 0.06;
-const LEAD_OUT = 0.08;
+const LEAD_IN = 0.05;
+const LEAD_OUT = 0.07;
+const PAGE_SIZE = 1.6;
+const PAGE_SEGMENTS = 32;
 const SHEET_COUNT = bookletSheets.length;
-const CURL_STRIPS = 16;
+
+type BookSheet = {
+  backMaterial: THREE.MeshBasicMaterial;
+  backTexture: THREE.Texture;
+  frontMaterial: THREE.MeshBasicMaterial;
+  frontMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  frontTexture: THREE.Texture;
+  geometry: THREE.PlaneGeometry;
+  backMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  originalX: Float32Array;
+  originalY: Float32Array;
+};
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function easeInOutCubic(t: number) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+function smoothstep(value: number) {
+  return value * value * (3 - 2 * value);
 }
 
-/** Nested strips: each hinge is the previous strip's free edge → real curl. */
-function CurlStrip({
-  index,
-  total,
-  src,
-}: {
-  index: number;
-  total: number;
-  src: string;
-}) {
-  return (
-    <div
-      className="booklet-curl__strip"
-      style={
-        {
-          "--i": index,
-          "--n": total,
-          backgroundImage: `url(${src})`,
-        } as React.CSSProperties
-      }
-    >
-      {index < total - 1 ? (
-        <CurlStrip index={index + 1} total={total} src={src} />
-      ) : null}
-    </div>
-  );
+function pageLabel(turn: number) {
+  const spread = clamp(Math.round(turn), 0, SHEET_COUNT);
+
+  if (spread === 0) return `01 / ${BOOKLET_PAGE_COUNT}`;
+  if (spread === SHEET_COUNT) {
+    return `${BOOKLET_PAGE_COUNT} / ${BOOKLET_PAGE_COUNT}`;
+  }
+
+  const leftPage = spread * 2;
+  return `${String(leftPage).padStart(2, "0")}–${String(leftPage + 1).padStart(2, "0")} / ${BOOKLET_PAGE_COUNT}`;
 }
 
-function BookletFace({
-  src,
-  side,
-  alt,
-}: {
-  src: string;
-  side: "front" | "back";
-  alt: string;
-}) {
-  return (
-    <div
-      className={`booklet-face booklet-face--${side}`}
-      role="img"
-      aria-label={alt}
-    >
-      <div
-        className="booklet-face__art"
-        style={{ backgroundImage: `url(${src})` }}
-      />
-      <div className="booklet-curl">
-        <CurlStrip index={0} total={CURL_STRIPS} src={src} />
-      </div>
-      {/* Overlays stay in a flat layer so they don't flatten strip 3D. */}
-      <div className="booklet-face__overlays" aria-hidden>
-        <div className="booklet-face__grain" />
-        <div className="booklet-face__sheen" />
-        <div className="booklet-face__curl-ridge" />
-        <div className="booklet-face__gutter" />
-        <div className="booklet-face__shade" />
-      </div>
-    </div>
-  );
+function configureTexture(
+  texture: THREE.Texture,
+  renderer: THREE.WebGLRenderer,
+  mirrored = false,
+) {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
+
+  if (mirrored) {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.repeat.x = -1;
+    texture.offset.x = 1;
+  }
+}
+
+function deformSheet(sheet: BookSheet, sheetIndex: number, totalTurn: number) {
+  const rawTurn = clamp(totalTurn - sheetIndex, 0, 1);
+  const localTurn =
+    rawTurn < 0.0005 ? 0 : rawTurn > 0.9995 ? 1 : rawTurn;
+  const easedTurn = smoothstep(localTurn);
+  const baseAngle = -Math.PI * easedTurn;
+  const curlStrength = Math.sin(Math.PI * easedTurn) * 0.72;
+  const position = sheet.geometry.getAttribute(
+    "position",
+  ) as THREE.BufferAttribute;
+  const xByColumn = new Float32Array(PAGE_SEGMENTS + 1);
+  const zByColumn = new Float32Array(PAGE_SEGMENTS + 1);
+  const segmentWidth = PAGE_SIZE / PAGE_SEGMENTS;
+
+  let x = 0;
+  let z = 0;
+
+  for (let column = 1; column <= PAGE_SEGMENTS; column += 1) {
+    const u = (column - 0.5) / PAGE_SEGMENTS;
+    const curlProfile = Math.sin(Math.PI * u * 0.86);
+    const segmentAngle = baseAngle - curlStrength * curlProfile;
+
+    x += Math.cos(segmentAngle) * segmentWidth;
+    z -= Math.sin(segmentAngle) * segmentWidth;
+    xByColumn[column] = x;
+    zByColumn[column] = z;
+  }
+
+  const rightStackDepth = (SHEET_COUNT - sheetIndex) * 0.003;
+  const leftStackDepth = (sheetIndex + 1) * 0.003;
+  const stackDepth =
+    rightStackDepth +
+    (leftStackDepth - rightStackDepth) * easedTurn +
+    Math.sin(Math.PI * easedTurn) * 0.012;
+  const vertexCount = position.count;
+
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const sourceX = sheet.originalX[vertex];
+    const column = clamp(
+      Math.round((sourceX / PAGE_SIZE) * PAGE_SEGMENTS),
+      0,
+      PAGE_SEGMENTS,
+    );
+    const u = column / PAGE_SEGMENTS;
+    const paperRipple =
+      Math.sin(Math.PI * u) * Math.sin(Math.PI * easedTurn) * 0.008;
+
+    position.setXYZ(
+      vertex,
+      xByColumn[column],
+      sheet.originalY[vertex] + paperRipple,
+      zByColumn[column] + stackDepth,
+    );
+  }
+
+  position.needsUpdate = true;
+
+  const renderOrder =
+    localTurn > 0.001 && localTurn < 0.999
+      ? 200 + sheetIndex
+      : localTurn >= 0.999
+        ? 100 + sheetIndex
+        : 100 + SHEET_COUNT - sheetIndex;
+  sheet.frontMesh.renderOrder = renderOrder;
+  sheet.backMesh.renderOrder = renderOrder;
 }
 
 export function BookletSection() {
   const sectionRef = useRef<HTMLElement>(null);
-  const bookRef = useRef<HTMLDivElement>(null);
-  const sheetRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const leftGutterRef = useRef<HTMLDivElement>(null);
-  const rightGutterRef = useRef<HTMLDivElement>(null);
-  const leftBlockRef = useRef<HTMLDivElement>(null);
-  const rightBlockRef = useRef<HTMLDivElement>(null);
-  const spineRef = useRef<HTMLDivElement>(null);
-  const shadowRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const counterRef = useRef<HTMLSpanElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "failed">(
+    "loading",
+  );
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const section = sectionRef.current;
-    const book = bookRef.current;
-    if (!section || !book) return;
+    const canvas = canvasRef.current;
+    if (!section || !canvas) return;
 
-    const sheets = sheetRefs.current.filter(Boolean) as HTMLDivElement[];
-    if (sheets.length !== SHEET_COUNT) return;
-
-    const render = (turned: number) => {
-      const turnedClamped = clamp(turned, 0, SHEET_COUNT);
-      // Snap with the same epsilon as fullyTurned so a scrub of 0.999
-      // still reveals the left page and the next right page.
-      const turnedSnapped = Math.floor(turnedClamped + 0.002);
-      const topTurnedIndex = turnedSnapped - 1;
-      const topUnturnedIndex = Math.min(SHEET_COUNT - 1, turnedSnapped);
-
-      let liftAmount = 0;
-      let coverOpen = 0;
-      let backClosed = 0;
-
-      sheets.forEach((sheet, index) => {
-        const local = clamp(turnedClamped - index, 0, 1);
-        const eased = easeInOutCubic(local);
-        const arc = Math.sin(eased * Math.PI);
-        // Epsilon so scrub never sticks mid-turn at 0.999 with the next
-        // page hidden, and so we don't swap to the strip mesh for dust.
-        const flipping = local > 0.002 && local < 0.998;
-        const fullyTurned = local >= 0.998;
-        const waiting = local <= 0.002;
-        const useCurl = flipping && arc > 0.04;
-
-        if (index === 0) coverOpen = eased;
-        if (index === SHEET_COUNT - 1) backClosed = eased;
-        liftAmount = Math.max(liftAmount, arc);
-
-        const showFaces =
-          flipping ||
-          (fullyTurned && index === topTurnedIndex) ||
-          (waiting && index === topUnturnedIndex);
-
-        const depth = flipping
-          ? 300
-          : fullyTurned
-            ? 100 + index
-            : 200 - index;
-
-        // Curl peaks mid-turn; free edge leads the spine.
-        const curl = useCurl ? arc : 0;
-        const curlPos = useCurl
-          ? `${clamp(8 + eased * 84, 8, 92)}%`
-          : "50%";
-
-        sheet.style.zIndex = String(depth);
-        sheet.style.setProperty("--front-shade", String(arc * 0.5));
-        sheet.style.setProperty("--back-shade", String(arc * 0.38));
-        sheet.style.setProperty("--edge", String(useCurl ? arc : 0));
-        sheet.style.setProperty("--faces", showFaces ? "1" : "0");
-        /* visibility avoids opacity-flattening of preserve-3d curl strips */
-        sheet.style.setProperty(
-          "--faces-vis",
-          showFaces ? "visible" : "hidden",
-        );
-        sheet.style.setProperty(
-          "--overlay-vis",
-          useCurl ? "hidden" : "visible",
-        );
-        // Full art when resting; strip mesh only while the page curls.
-        sheet.style.setProperty("--art-vis", useCurl ? "hidden" : "visible");
-        sheet.style.setProperty("--curl-vis", useCurl ? "visible" : "hidden");
-        sheet.style.setProperty("--curl", String(curl));
-        sheet.style.setProperty("--curl-pos", curlPos);
-        sheet.style.setProperty("--turn", String(eased));
-
-        // No translateZ while flipping — Z under perspective pulls the hinge
-        // off the binding. Stacking uses z-index only; curl is strip rotateY.
-        const stackZ = flipping
-          ? 0
-          : fullyTurned
-            ? index * 0.4
-            : (SHEET_COUNT - index) * 0.4;
-
-        // Spine hinge must stay planted — GSAP defaults to 50% 50% which
-        // orbits the sheet around its center and lifts the binding edge.
-        gsap.set(sheet, {
-          transformOrigin: "left center",
-          rotateY: -180 * eased,
-          rotateX: 0,
-          z: stackZ,
-        });
-      });
-
-      const openAmount = clamp(coverOpen, 0, 1);
-      const closeAmount = clamp(backClosed, 0, 1);
-      gsap.set(book, {
-        transformOrigin: "50% 50%",
-        xPercent: -25 * (1 - openAmount) + 25 * closeAmount,
-      });
-
-      gsap.set(leftGutterRef.current, {
-        autoAlpha: openAmount * (1 - closeAmount * 0.85),
-      });
-      gsap.set(rightGutterRef.current, {
-        autoAlpha: (1 - closeAmount) * Math.min(1, openAmount + 0.15),
-      });
-      gsap.set(spineRef.current, {
-        autoAlpha: 0.25 + openAmount * 0.75 * (1 - closeAmount * 0.5),
-      });
-
-      const leftStack = clamp(turnedClamped / SHEET_COUNT, 0, 1);
-      gsap.set(leftBlockRef.current, {
-        autoAlpha: openAmount * 0.9,
-        scaleX: 0.2 + leftStack * 0.8,
-      });
-      gsap.set(rightBlockRef.current, {
-        autoAlpha: (1 - closeAmount) * 0.9,
-        scaleX: 0.2 + (1 - leftStack) * 0.8,
-      });
-
-      gsap.set(shadowRef.current, {
-        scaleX: 0.58 + Math.min(openAmount, 1 - closeAmount) * 0.42,
-        opacity: 0.45 + liftAmount * 0.35,
-      });
-
-      const spread = clamp(Math.round(turnedClamped), 0, SHEET_COUNT);
-      const label =
-        spread === 0
-          ? `01 / ${BOOKLET_PAGE_COUNT}`
-          : spread === SHEET_COUNT
-            ? `${BOOKLET_PAGE_COUNT} / ${BOOKLET_PAGE_COUNT}`
-            : `${String(spread * 2).padStart(2, "0")}–${String(spread * 2 + 1).padStart(2, "0")} / ${BOOKLET_PAGE_COUNT}`;
-
-      if (counterRef.current && counterRef.current.textContent !== label) {
-        counterRef.current.textContent = label;
-      }
-      gsap.set(progressRef.current, {
-        scaleX: clamp(turnedClamped / SHEET_COUNT, 0, 1),
-      });
-    };
-
+    let disposed = false;
+    let inView = false;
+    let frame: number | undefined;
+    let previousTime = performance.now();
+    let targetTurn = 0;
+    let renderedTurn = 0;
+    let lastLabel = "";
+    const sheets: BookSheet[] = [];
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
-    if (reducedMotion) {
-      render(1);
+    let renderer: THREE.WebGLRenderer;
+
+    try {
+      renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: true,
+        canvas,
+        powerPreference: "high-performance",
+      });
+    } catch {
+      window.setTimeout(() => setStatus("failed"), 0);
       return;
     }
 
-    render(0);
+    renderer.setClearColor(0x000000, 0);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.NoToneMapping;
 
-    const trigger = ScrollTrigger.create({
-      trigger: section,
-      start: "top top",
-      end: "bottom bottom",
-      scrub: 0.35,
-      invalidateOnRefresh: true,
-      onUpdate: (self) => {
-        const span = 1 - LEAD_IN - LEAD_OUT;
-        const t = clamp((self.progress - LEAD_IN) / span, 0, 1);
-        render(t * SHEET_COUNT);
-      },
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(35, 2, 0.1, 20);
+    camera.position.set(0, 0.02, 3.15);
+    camera.lookAt(0, 0, 0);
+
+    const bookRoot = new THREE.Group();
+    bookRoot.rotation.x = -0.045;
+    scene.add(bookRoot);
+
+    const loadingManager = new THREE.LoadingManager();
+    loadingManager.onLoad = () => {
+      if (disposed) return;
+      setStatus("ready");
+      startFrame();
+    };
+    loadingManager.onError = () => {
+      if (!disposed) setStatus("failed");
+    };
+
+    const textureLoader = new THREE.TextureLoader(loadingManager);
+
+    bookletSheets.forEach((source, sheetIndex) => {
+      const geometry = new THREE.PlaneGeometry(
+        PAGE_SIZE,
+        PAGE_SIZE,
+        PAGE_SEGMENTS,
+        1,
+      );
+      geometry.translate(PAGE_SIZE / 2, 0, 0);
+
+      const position = geometry.getAttribute(
+        "position",
+      ) as THREE.BufferAttribute;
+      const originalX = new Float32Array(position.count);
+      const originalY = new Float32Array(position.count);
+
+      for (let vertex = 0; vertex < position.count; vertex += 1) {
+        originalX[vertex] = position.getX(vertex);
+        originalY[vertex] = position.getY(vertex);
+      }
+
+      const frontTexture = textureLoader.load(bookletPageSrc(source.front));
+      const backTexture = textureLoader.load(bookletPageSrc(source.back));
+      configureTexture(frontTexture, renderer);
+      configureTexture(backTexture, renderer, true);
+
+      const frontMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        map: frontTexture,
+        side: THREE.FrontSide,
+      });
+      const backMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        map: backTexture,
+        side: THREE.BackSide,
+      });
+
+      const frontMesh = new THREE.Mesh(geometry, frontMaterial);
+      const backMesh = new THREE.Mesh(geometry, backMaterial);
+
+      const sheet: BookSheet = {
+        backMaterial,
+        backMesh,
+        backTexture,
+        frontMaterial,
+        frontMesh,
+        frontTexture,
+        geometry,
+        originalX,
+        originalY,
+      };
+
+      sheets.push(sheet);
+      bookRoot.add(frontMesh, backMesh);
+      deformSheet(sheet, sheetIndex, 0);
     });
 
-    const onResize = () => ScrollTrigger.refresh();
-    window.addEventListener("resize", onResize);
-    ScrollTrigger.refresh();
+    const updateMeta = (turn: number) => {
+      const nextLabel = pageLabel(turn);
+
+      if (counterRef.current && nextLabel !== lastLabel) {
+        counterRef.current.textContent = nextLabel;
+        lastLabel = nextLabel;
+      }
+      if (progressRef.current) {
+        progressRef.current.style.transform = `scaleX(${clamp(turn / SHEET_COUNT, 0, 1)})`;
+      }
+    };
+
+    const updateBook = (turn: number) => {
+      sheets.forEach((sheet, index) => deformSheet(sheet, index, turn));
+
+      const opening = smoothstep(clamp(turn, 0, 1));
+      const closing = smoothstep(
+        clamp(turn - (SHEET_COUNT - 1), 0, 1),
+      );
+      bookRoot.position.x =
+        -(PAGE_SIZE / 2) * (1 - opening) + (PAGE_SIZE / 2) * closing;
+      updateMeta(turn);
+    };
+
+    const resizeRenderer = () => {
+      const width = Math.max(1, canvas.clientWidth);
+      const height = Math.max(1, canvas.clientHeight);
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
+      const drawWidth = Math.floor(width * pixelRatio);
+      const drawHeight = Math.floor(height * pixelRatio);
+
+      if (canvas.width !== drawWidth || canvas.height !== drawHeight) {
+        renderer.setSize(drawWidth, drawHeight, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      }
+    };
+
+    const updateTargetFromScroll = () => {
+      if (reducedMotion) {
+        targetTurn = 0;
+        return;
+      }
+
+      const scrollDistance = Math.max(
+        1,
+        section.offsetHeight - window.innerHeight,
+      );
+      const sectionProgress = clamp(
+        -section.getBoundingClientRect().top / scrollDistance,
+        0,
+        1,
+      );
+      const span = 1 - LEAD_IN - LEAD_OUT;
+      const progress = clamp((sectionProgress - LEAD_IN) / span, 0, 1);
+      targetTurn = progress * SHEET_COUNT;
+      startFrame();
+    };
+
+    const render = (time: number) => {
+      frame = undefined;
+      if (disposed || !inView) return;
+
+      const deltaSeconds = Math.min((time - previousTime) / 1000, 0.05);
+      previousTime = time;
+      const smoothing = reducedMotion
+        ? 1
+        : 1 - Math.exp(-deltaSeconds * 13.5);
+      renderedTurn += (targetTurn - renderedTurn) * smoothing;
+
+      if (targetTurn === 0 && renderedTurn < 0.002) {
+        renderedTurn = 0;
+      } else if (
+        targetTurn === SHEET_COUNT &&
+        SHEET_COUNT - renderedTurn < 0.002
+      ) {
+        renderedTurn = SHEET_COUNT;
+      }
+
+      if (Math.abs(targetTurn - renderedTurn) < 0.0005) {
+        renderedTurn = targetTurn;
+      }
+
+      resizeRenderer();
+      updateBook(renderedTurn);
+      renderer.render(scene, camera);
+
+      if (Math.abs(targetTurn - renderedTurn) >= 0.0005) {
+        frame = window.requestAnimationFrame(render);
+      }
+    };
+
+    function startFrame() {
+      if (!disposed && inView && frame === undefined) {
+        previousTime = performance.now();
+        frame = window.requestAnimationFrame(render);
+      }
+    }
+
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      if (!disposed) setStatus("failed");
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry.isIntersecting;
+        if (inView) {
+          updateTargetFromScroll();
+          startFrame();
+        } else if (frame !== undefined) {
+          window.cancelAnimationFrame(frame);
+          frame = undefined;
+        }
+      },
+      { rootMargin: "100% 0px" },
+    );
+    const resizeObserver = new ResizeObserver(() => startFrame());
+
+    observer.observe(section);
+    resizeObserver.observe(canvas);
+    canvas.addEventListener("webglcontextlost", onContextLost);
+    window.addEventListener("scroll", updateTargetFromScroll, {
+      passive: true,
+    });
+    window.addEventListener("resize", updateTargetFromScroll);
+
+    updateMeta(0);
+    resizeRenderer();
+    updateBook(0);
+    renderer.render(scene, camera);
 
     return () => {
-      window.removeEventListener("resize", onResize);
-      trigger.kill();
+      disposed = true;
+      observer.disconnect();
+      resizeObserver.disconnect();
+      canvas.removeEventListener("webglcontextlost", onContextLost);
+      window.removeEventListener("scroll", updateTargetFromScroll);
+      window.removeEventListener("resize", updateTargetFromScroll);
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+
+      sheets.forEach((sheet) => {
+        sheet.geometry.dispose();
+        sheet.frontMaterial.dispose();
+        sheet.backMaterial.dispose();
+        sheet.frontTexture.dispose();
+        sheet.backTexture.dispose();
+      });
+      renderer.dispose();
     };
   }, []);
 
@@ -277,100 +407,56 @@ export function BookletSection() {
       ref={sectionRef}
       id="booklet"
       className="booklet-section relative h-[700vh]"
+      data-status={status}
       aria-label="Team of Silicons offer booklet"
     >
-      <div className="booklet-pin sticky top-0 flex h-dvh flex-col justify-center px-8">
+      <div className="booklet-pin sticky top-0 flex h-dvh flex-col justify-center px-6 sm:px-8">
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
           <div className="booklet-stage">
-            <div className="booklet-stage__light" aria-hidden />
-
-            <div ref={bookRef} className="booklet-book">
-              <div className="booklet-half booklet-half--left">
-                <div className="booklet-half__paper" aria-hidden />
-                <div
-                  ref={leftGutterRef}
-                  className="booklet-half__gutter"
-                  aria-hidden
-                />
-              </div>
-
-              <div className="booklet-half booklet-half--right">
-                <div className="booklet-half__paper" aria-hidden />
-                <div
-                  ref={rightGutterRef}
-                  className="booklet-half__gutter"
-                  aria-hidden
-                />
-              </div>
-
-              <div
-                ref={leftBlockRef}
-                className="booklet-block booklet-block--left"
-                aria-hidden
-              />
-              <div
-                ref={rightBlockRef}
-                className="booklet-block booklet-block--right"
-                aria-hidden
+            <div className="booklet-viewer">
+              <canvas
+                ref={canvasRef}
+                className="booklet-three-canvas"
+                role="img"
+                aria-label="Interactive 3D offer booklet. Scroll to turn its pages."
               />
 
-              {bookletSheets.map((sheet, index) => (
-                <div
-                  key={sheet.front}
-                  ref={(el) => {
-                    sheetRefs.current[index] = el;
-                  }}
-                  className="booklet-sheet"
-                >
-                  <BookletFace
-                    src={bookletPageSrc(sheet.front)}
-                    side="front"
-                    alt={
-                      index === 0
-                        ? "Offer booklet front cover"
-                        : `Booklet page ${sheet.front}`
-                    }
-                  />
-                  <BookletFace
-                    src={bookletPageSrc(sheet.back)}
-                    side="back"
-                    alt={
-                      index === SHEET_COUNT - 1
-                        ? "Offer booklet back cover"
-                        : `Booklet page ${sheet.back}`
-                    }
-                  />
-                  <div className="booklet-sheet__edge" aria-hidden />
-                  <div className="booklet-sheet__curl-shadow" aria-hidden />
-                </div>
-              ))}
-
-              <div className="booklet-hinge" aria-hidden />
-
-              <div ref={spineRef} className="booklet-spine" aria-hidden>
-                <div className="booklet-spine__band" />
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <span
-                    key={i}
-                    className="booklet-spine__stitch"
-                    style={{ "--i": i } as React.CSSProperties}
-                  />
-                ))}
+              <div
+                className="booklet-fallback"
+                aria-hidden={status === "ready"}
+              >
+                <Image
+                  src={bookletPageSrc(1)}
+                  alt="Offer booklet front cover"
+                  fill
+                  sizes="(max-width: 640px) 46vw, 32rem"
+                  priority={false}
+                />
               </div>
             </div>
-
-            <div ref={shadowRef} className="booklet-stage__shadow" aria-hidden />
           </div>
 
           <div className="booklet-meta">
-            <span className="booklet-meta__label">Offer Booklet</span>
+            <span className="booklet-meta__label">Scroll to turn</span>
             <div className="booklet-meta__track" aria-hidden>
               <div ref={progressRef} className="booklet-meta__bar" />
             </div>
-            <span ref={counterRef} className="booklet-meta__counter">
+            <span
+              ref={counterRef}
+              className="booklet-meta__counter"
+              aria-live="polite"
+            >
               01 / {BOOKLET_PAGE_COUNT}
             </span>
           </div>
+
+          <p className="sr-only" role="status" aria-live="polite">
+            {status === "loading"
+              ? "Interactive 3D offer booklet loading."
+              : status === "failed"
+                ? "3D booklet unavailable. Showing the cover image."
+                : "Interactive 3D offer booklet ready. Scroll to turn its pages."}
+          </p>
         </div>
       </div>
     </section>
