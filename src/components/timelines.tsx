@@ -44,7 +44,7 @@ export function Timelines({ condensed = false }: { condensed?: boolean }) {
   return (
     <section id="timelines" className="border-t-[0.5px] border-border px-8 py-16">
       <div className="mx-auto max-w-5xl">
-        <h2 className="mb-10 max-w-xl text-xl font-medium tracking-tight">
+        <h2 className="mb-10 max-w-xl text-xl font-medium">
           {condensed
             ? "D1 to D10, from first call to elite employees."
             : "Your team of silicons, deployed in ten days."}
@@ -53,8 +53,8 @@ export function Timelines({ condensed = false }: { condensed?: boolean }) {
           {items.map((step) => (
             <li key={step.day} className="flex flex-col gap-2">
               <span className="font-pixel-square text-lg text-ink">{step.day}</span>
-              <h3 className="text-base font-medium tracking-tight">{step.title}</h3>
-              <p className="text-sm leading-relaxed tracking-tight text-foreground/75">
+              <h3 className="text-base font-medium">{step.title}</h3>
+              <p className="text-sm leading-relaxed text-foreground/75">
                 {step.description}
               </p>
             </li>

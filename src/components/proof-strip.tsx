@@ -13,7 +13,7 @@ export function ProofStrip() {
             <p className="font-pixel-square text-3xl text-ink sm:text-4xl">
               {stat.value}
             </p>
-            <p className="mt-2 text-sm tracking-tight text-foreground/75">
+            <p className="mt-2 text-sm text-foreground/75">
               {stat.label}
             </p>
           </div>

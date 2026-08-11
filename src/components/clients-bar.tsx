@@ -33,7 +33,7 @@ function LogoTile({ client }: { client: Client }) {
       />
     </div>
   ) : (
-    <span className="text-center text-xs font-medium tracking-tight text-foreground/75 sm:text-sm">
+    <span className="text-center text-xs font-medium text-foreground/75 sm:text-sm">
       {client.name}
     </span>
   );

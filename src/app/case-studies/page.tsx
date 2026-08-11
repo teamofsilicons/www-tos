@@ -22,13 +22,13 @@ export default function CaseStudiesPage() {
                 href={`/case-studies/${study.slug}`}
                 className="group rounded-lg border border-border bg-[#EDE8E0]/30 p-6 transition-colors hover:border-[#1F5CB1]/40 hover:bg-[#EDE8E0]/50"
               >
-                <h2 className="mb-2 text-lg font-medium tracking-tight group-hover:text-[#1F5CB1]">
+                <h2 className="mb-2 text-lg font-medium group-hover:text-[#1F5CB1]">
                   {study.headline}
                 </h2>
-                <p className="mb-2 text-sm tracking-tight text-foreground/60">
+                <p className="mb-2 text-sm text-foreground/60">
                   {study.division}
                 </p>
-                <p className="text-sm leading-relaxed tracking-tight text-foreground/75">
+                <p className="text-sm leading-relaxed text-foreground/75">
                   {study.outcome}
                 </p>
               </Link>

@@ -56,7 +56,7 @@ export function TheShift() {
       <div className="sticky top-0 flex h-dvh items-center px-8">
         <div className="flex h-[80vh] w-full items-center rounded-xl border border-[#E7E3D8] bg-[#F6F4EC]">
           <div className="mx-auto w-full max-w-5xl">
-            <h2 className="max-w-4xl text-2xl font-normal leading-[1.2] tracking-tight sm:text-3xl md:text-4xl lg:text-5xl">
+            <h2 className="max-w-4xl text-2xl font-normal leading-[1.2] sm:text-3xl md:text-4xl lg:text-5xl">
               {words.map((word, i) => (
                 <span
                   key={`${word}-${i}`}

@@ -35,10 +35,10 @@ export function Outcomes({ variant = "home" }: { variant?: "home" | "full" }) {
               key={outcome.title}
               className="rounded-lg border border-border bg-[#EDE8E0]/30 p-6"
             >
-              <h3 className="mb-2 text-base font-medium tracking-tight">
+              <h3 className="mb-2 text-base font-medium">
                 {outcome.title}
               </h3>
-              <p className="text-base leading-relaxed tracking-tight text-foreground/80">
+              <p className="text-base leading-relaxed text-foreground/80">
                 {outcome.description}
               </p>
             </article>

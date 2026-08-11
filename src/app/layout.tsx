@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { GeistPixelSquare, GeistPixelGrid, aktivGrotesk } from "@/lib/fonts";
+import { GeistPixelSquare, GeistPixelGrid, bdoGrotesk, hedvigLettersSerif } from "@/lib/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,7 +15,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${aktivGrotesk.variable} ${GeistPixelSquare.variable} ${GeistPixelGrid.variable} h-full antialiased`}
+      className={`${bdoGrotesk.variable} ${hedvigLettersSerif.variable} ${GeistPixelSquare.variable} ${GeistPixelGrid.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-background text-foreground">
         {children}

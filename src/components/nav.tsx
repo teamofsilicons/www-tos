@@ -17,7 +17,7 @@ const pillShellClass =
   "inline-flex items-center h-9 rounded-lg border border-neutral-200 bg-white/70 p-1 shadow-md backdrop-blur-md";
 
 const pillLinkClass =
-  "relative z-10 inline-flex items-center h-7 rounded py-1 px-2 text-sm tracking-tight transition-colors focus-visible:ring-4 focus-visible:ring-blue-200 focus:text-foreground hover:text-foreground";
+  "relative z-10 inline-flex items-center h-7 rounded py-1 px-2 text-sm transition-colors focus-visible:ring-4 focus-visible:ring-blue-200 focus:text-foreground hover:text-foreground";
 
 type IndicatorState = {
   width: number;

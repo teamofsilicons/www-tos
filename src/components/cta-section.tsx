@@ -13,7 +13,7 @@ export function CtaSection({
         <h2 className="font-pixel-grid mb-4 text-2xl font-light tracking-tight sm:text-3xl">
           {title}
         </h2>
-        <p className="mx-auto mb-8 max-w-lg text-lg tracking-tight text-foreground/80">
+        <p className="mx-auto mb-8 max-w-lg text-lg text-foreground/80">
           {description}
         </p>
         <Link

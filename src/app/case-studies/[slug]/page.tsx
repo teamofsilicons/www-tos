@@ -26,14 +26,14 @@ export default async function CaseStudyPage({
           <div className="mx-auto max-w-5xl">
             <Link
               href="/case-studies"
-              className="mb-6 inline-block text-sm tracking-tight text-[#1F5CB1] hover:underline"
+              className="mb-6 inline-block text-sm text-[#1F5CB1] hover:underline"
             >
               Back to Case Studies
             </Link>
             <h1 className="font-pixel-grid max-w-3xl text-3xl font-light tracking-tight sm:text-4xl">
               {study.headline}
             </h1>
-            <p className="mt-3 text-base tracking-tight text-foreground/60">
+            <p className="mt-3 text-base text-foreground/60">
               {study.division}
             </p>
             {study.highlight ? (
@@ -49,7 +49,7 @@ export default async function CaseStudyPage({
             {study.body.map((paragraph, i) => (
               <p
                 key={i}
-                className="max-w-2xl text-lg leading-relaxed tracking-tight text-foreground/80"
+                className="max-w-2xl text-lg leading-relaxed text-foreground/80"
               >
                 {paragraph}
               </p>

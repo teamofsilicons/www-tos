@@ -70,7 +70,7 @@ export function WhatItDoes() {
   return (
     <section id="what-it-does" className="px-8 pb-16 pt-16">
       <div className="mx-auto max-w-5xl">
-        <h2 className="max-w-2xl text-2xl font-medium leading-snug tracking-tight sm:text-3xl">
+        <h2 className="max-w-2xl text-2xl font-medium leading-snug sm:text-3xl">
           Silicons work across every function.
         </h2>
         <div className="mt-10 grid grid-cols-1 justify-items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
