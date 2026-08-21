@@ -169,10 +169,66 @@ a[href] {
 
 /* ─── Booklet ─────────────────────────────────────────────────────────── */
 
+/* The paper is near-white, so the section needs a warmer surface underneath or
+   the book dissolves into the page. Edges fade back to the site background so
+   scrolling in and out of the pinned section has no hard seam. */
+
 .booklet-section {
   --paper: #fefdfa;
   --paper-edge: #e8e1d4;
-  background: var(--paper);
+  background:
+    linear-gradient(
+      to bottom,
+      var(--background) 0%,
+      rgba(255, 253, 249, 0) 7%,
+      rgba(255, 253, 249, 0) 93%,
+      var(--background) 100%
+    ),
+    radial-gradient(
+      ellipse 70% 55% at 50% 44%,
+      #f4f0e7 0%,
+      #ebe5d9 52%,
+      #e3dccd 100%
+    );
+}
+
+/* Contact shadow. Width tracks --book-open because the footprint is one page
+   wide when the booklet is closed and two when it is open. */
+
+.booklet-shadow {
+  position: absolute;
+  bottom: 3.5%;
+  left: 50%;
+  z-index: 1;
+  width: calc(41% + 40% * var(--book-open, 0));
+  height: 8%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    rgba(46, 39, 28, 0.3) 0%,
+    rgba(46, 39, 28, 0.14) 44%,
+    rgba(46, 39, 28, 0.04) 70%,
+    transparent 100%
+  );
+  filter: blur(9px);
+}
+
+/* Tight core where the paper meets the surface. */
+.booklet-shadow::after {
+  content: "";
+  position: absolute;
+  top: 30%;
+  right: 9%;
+  left: 9%;
+  height: 24%;
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    rgba(46, 39, 28, 0.4) 0%,
+    rgba(46, 39, 28, 0.12) 58%,
+    transparent 100%
+  );
+  filter: blur(3px);
 }
 
 .booklet-pin {

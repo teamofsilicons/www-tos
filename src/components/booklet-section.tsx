@@ -15,6 +15,56 @@ const PAGE_SIZE = 1.6;
 const PAGE_SEGMENTS = 32;
 const SHEET_COUNT = bookletSheets.length;
 
+/**
+ * The page JPGs already carry a fine matte stock. This overlay is only a tight
+ * tooth so it does not reprint as large fibres on top of that. Mipmaps keep it
+ * from aliasing into visible grit at typical page size.
+ */
+const GRAIN_TILE = 256;
+const GRAIN_REPEAT = 4;
+const GRAIN_STRENGTH = 0.012;
+
+/** Specular on printed ink (spot-UV / coated graphics), not on the paper. */
+const GLOSS_LIGHT_LEN = Math.hypot(-0.28, 0.62, 0.72);
+const GLOSS_LIGHT_X = -0.28 / GLOSS_LIGHT_LEN;
+const GLOSS_LIGHT_Y = 0.62 / GLOSS_LIGHT_LEN;
+const GLOSS_LIGHT_Z = 0.72 / GLOSS_LIGHT_LEN;
+const GLOSS_STRENGTH = 0.55;
+const GLOSS_POWER = 18;
+/** Always-on varnish lift so coated ink reads glossier than paper at rest. */
+const GLOSS_COAT = 0.07;
+
+/**
+ * Key light in the XZ plane. The sheets only bend around Y, so a 2D light is
+ * enough to shade the curl and costs one dot product per column.
+ */
+const LIGHT_LENGTH = Math.hypot(-0.42, 0.91);
+const LIGHT_X = -0.42 / LIGHT_LENGTH;
+const LIGHT_Z = 0.91 / LIGHT_LENGTH;
+const PAPER_DIFFUSE = 0.2;
+/** Depth of the shaded valley where the pages meet the binding. */
+const GUTTER_SHADE = 0.16;
+/** Chosen so a flat page lands on exactly 1.0 and matches the source art. */
+const PAPER_AMBIENT = 1 - PAPER_DIFFUSE * LIGHT_Z;
+
+/**
+ * The same key light raised above the book, used only to project the turning
+ * page's shadow. Sheet normals have no Y component, so the height cannot affect
+ * shading — it just decides where the shadow lands.
+ */
+const LIGHT_HEIGHT = 0.62;
+/** Shadow displacement per unit the page is lifted off the resting stack. */
+const SHADOW_SLIDE = -LIGHT_X / LIGHT_Z;
+const SHADOW_DROP = LIGHT_HEIGHT / LIGHT_Z;
+/** Sits above the thickest resting stack so the shadow wins the depth test. */
+const SHADOW_PLANE_Z = 0.024;
+const SHADOW_STRENGTH = 0.62;
+/**
+ * Kept tight: the page covers most of its own shadow, so the fringe around the
+ * silhouette is the only part on screen and must not fade to nothing.
+ */
+const SHADOW_FEATHER = 0.05;
+
 type BookSheet = {
   backMaterial: THREE.MeshBasicMaterial;
   backTexture: THREE.Texture;
@@ -23,8 +73,18 @@ type BookSheet = {
   frontTexture: THREE.Texture;
   geometry: THREE.PlaneGeometry;
   backMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  lambert: THREE.BufferAttribute;
+  /** Per-vertex (sin θ, cos θ) of the local curl, for ink specular. */
+  bend: THREE.BufferAttribute;
   originalX: Float32Array;
   originalY: Float32Array;
+  /** Bend of the sheet along its width, reused to project the cast shadow. */
+  xByColumn: Float32Array;
+  zByColumn: Float32Array;
+  nxByColumn: Float32Array;
+  nzByColumn: Float32Array;
+  lambertByColumn: Float32Array;
+  easedTurn: number;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -45,6 +105,186 @@ function pageLabel(turn: number) {
 
   const leftPage = spread * 2;
   return `${String(leftPage).padStart(2, "0")}–${String(leftPage + 1).padStart(2, "0")} / ${BOOKLET_PAGE_COUNT}`;
+}
+
+/**
+ * Isotropic micro-roughness for matte stock. A 3×3 blur knocks out sparkle
+ * without stretching the noise into visible fibres.
+ */
+function createGrainTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = GRAIN_TILE;
+  canvas.height = GRAIN_TILE;
+
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+
+  const speckle = new Float32Array(GRAIN_TILE * GRAIN_TILE);
+  for (let i = 0; i < speckle.length; i += 1) {
+    speckle[i] = Math.random();
+  }
+
+  const image = context.createImageData(GRAIN_TILE, GRAIN_TILE);
+
+  for (let y = 0; y < GRAIN_TILE; y += 1) {
+    for (let x = 0; x < GRAIN_TILE; x += 1) {
+      let blurred = 0;
+      for (let row = -1; row <= 1; row += 1) {
+        const wrappedRow = (y + row + GRAIN_TILE) % GRAIN_TILE;
+        for (let col = -1; col <= 1; col += 1) {
+          blurred +=
+            speckle[
+              wrappedRow * GRAIN_TILE + ((x + col + GRAIN_TILE) % GRAIN_TILE)
+            ];
+        }
+      }
+      blurred /= 9;
+
+      const index = y * GRAIN_TILE + x;
+      const value = clamp(0.5 + (blurred - 0.5) * 0.7, 0, 1);
+      const channel = Math.round(value * 255);
+      const pixel = index * 4;
+
+      image.data[pixel] = channel;
+      image.data[pixel + 1] = channel;
+      image.data[pixel + 2] = channel;
+      image.data[pixel + 3] = 255;
+    }
+  }
+
+  context.putImageData(image, 0, 0);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+
+  return texture;
+}
+
+/**
+ * Matte tooth on unprinted paper, coated specular on ink. `side` flips both
+ * the lambert term and the world normal for the shared back-face geometry.
+ */
+function applyPaperSurface(
+  material: THREE.MeshBasicMaterial,
+  grain: THREE.Texture | null,
+  side: "front" | "back",
+) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uGrainMap = { value: grain };
+    shader.uniforms.uGrainRepeat = { value: grain ? GRAIN_REPEAT : 0 };
+    shader.uniforms.uGrainStrength = { value: grain ? GRAIN_STRENGTH : 0 };
+    shader.uniforms.uSide = { value: side === "front" ? 1 : -1 };
+    shader.uniforms.uAmbient = { value: PAPER_AMBIENT };
+    shader.uniforms.uDiffuse = { value: PAPER_DIFFUSE };
+    shader.uniforms.uGutter = { value: GUTTER_SHADE };
+    shader.uniforms.uGloss = { value: GLOSS_STRENGTH };
+    shader.uniforms.uGlossPower = { value: GLOSS_POWER };
+    shader.uniforms.uGlossCoat = { value: GLOSS_COAT };
+    shader.uniforms.uLight = {
+      value: new THREE.Vector3(GLOSS_LIGHT_X, GLOSS_LIGHT_Y, GLOSS_LIGHT_Z),
+    };
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+attribute float aLambert;
+attribute vec2 aBend;
+varying float vLambert;
+varying vec2 vGrainUv;
+varying vec3 vWorldNormal;
+varying vec3 vWorldPosition;`,
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+vLambert = aLambert;
+vGrainUv = uv;
+vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;
+vWorldNormal = normalize(mat3(modelMatrix) * vec3(aBend.x, 0.0, aBend.y));`,
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+uniform sampler2D uGrainMap;
+uniform float uGrainRepeat;
+uniform float uGrainStrength;
+uniform float uSide;
+uniform float uAmbient;
+uniform float uDiffuse;
+uniform float uGutter;
+uniform float uGloss;
+uniform float uGlossPower;
+uniform float uGlossCoat;
+uniform vec3 uLight;
+varying float vLambert;
+varying vec2 vGrainUv;
+varying vec3 vWorldNormal;
+varying vec3 vWorldPosition;`,
+      )
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+float paperLight = uAmbient + uDiffuse * max(0.0, vLambert * uSide);
+float fibre = texture2D(uGrainMap, vGrainUv * uGrainRepeat).r;
+float tooth = 1.0 + (fibre - 0.5) * 2.0 * uGrainStrength;
+float luma = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+// Near-white is unprinted matte stock; everything else is coated ink.
+float ink = 1.0 - smoothstep(0.84, 0.97, luma);
+vec3 N = normalize(vWorldNormal) * uSide;
+vec3 V = normalize(cameraPosition - vWorldPosition);
+vec3 H = normalize(uLight + V);
+float spec = pow(max(0.0, dot(N, H)), uGlossPower);
+float fresnel = pow(1.0 - max(0.0, dot(N, V)), 2.4);
+float gloss = (uGlossCoat + spec * 0.78 + fresnel * 0.22) * ink * uGloss;
+// uv.x is 0 at the spine on both faces, so this darkens the binding valley.
+float gutter = 1.0 - uGutter * (1.0 - smoothstep(0.0, 0.14, vGrainUv.x));
+// Varnish fills the tooth; unprinted paper keeps the matte grain.
+diffuseColor.rgb *= paperLight * mix(tooth, 1.0, ink * 0.85) * gutter;
+diffuseColor.rgb += gloss * vec3(1.0, 0.997, 0.99);`,
+      );
+  };
+}
+
+/**
+ * Feathered square used as the cast shadow's alpha. `alphaMap` reads the green
+ * channel, so the falloff is written to RGB.
+ */
+function createShadowTexture() {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+
+  const image = context.createImageData(size, size);
+
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const u = (x + 0.5) / size;
+      const v = (y + 0.5) / size;
+      const edge = Math.min(u, 1 - u, v, 1 - v);
+      const level = Math.round(
+        smoothstep(clamp(edge / SHADOW_FEATHER, 0, 1)) * 255,
+      );
+      const index = (y * size + x) * 4;
+      image.data[index] = level;
+      image.data[index + 1] = level;
+      image.data[index + 2] = level;
+      image.data[index + 3] = 255;
+    }
+  }
+
+  context.putImageData(image, 0, 0);
+  return new THREE.CanvasTexture(canvas);
 }
 
 function configureTexture(
@@ -72,9 +312,11 @@ function deformSheet(sheet: BookSheet, sheetIndex: number, totalTurn: number) {
   const position = sheet.geometry.getAttribute(
     "position",
   ) as THREE.BufferAttribute;
-  const xByColumn = new Float32Array(PAGE_SEGMENTS + 1);
-  const zByColumn = new Float32Array(PAGE_SEGMENTS + 1);
+  const { xByColumn, zByColumn, lambertByColumn, nxByColumn, nzByColumn } =
+    sheet;
   const segmentWidth = PAGE_SIZE / PAGE_SEGMENTS;
+
+  sheet.easedTurn = easedTurn;
 
   let x = 0;
   let z = 0;
@@ -88,7 +330,17 @@ function deformSheet(sheet: BookSheet, sheetIndex: number, totalTurn: number) {
     z -= Math.sin(segmentAngle) * segmentWidth;
     xByColumn[column] = x;
     zByColumn[column] = z;
+    nxByColumn[column] = Math.sin(segmentAngle);
+    nzByColumn[column] = Math.cos(segmentAngle);
+    // Surface normal of this segment, perpendicular to its tangent in XZ.
+    lambertByColumn[column] =
+      Math.sin(segmentAngle) * LIGHT_X + Math.cos(segmentAngle) * LIGHT_Z;
   }
+
+  // The spine column has no segment of its own; it inherits the first one.
+  lambertByColumn[0] = lambertByColumn[1];
+  nxByColumn[0] = nxByColumn[1];
+  nzByColumn[0] = nzByColumn[1];
 
   const rightStackDepth = (SHEET_COUNT - sheetIndex) * 0.003;
   const leftStackDepth = (sheetIndex + 1) * 0.003;
@@ -115,9 +367,13 @@ function deformSheet(sheet: BookSheet, sheetIndex: number, totalTurn: number) {
       sheet.originalY[vertex] + paperRipple,
       zByColumn[column] + stackDepth,
     );
+    sheet.lambert.setX(vertex, lambertByColumn[column]);
+    sheet.bend.setXY(vertex, nxByColumn[column], nzByColumn[column]);
   }
 
   position.needsUpdate = true;
+  sheet.lambert.needsUpdate = true;
+  sheet.bend.needsUpdate = true;
 
   const renderOrder =
     localTurn > 0.001 && localTurn < 0.999
@@ -193,6 +449,14 @@ export function BookletSection() {
     };
 
     const textureLoader = new THREE.TextureLoader(loadingManager);
+    const grainTexture = createGrainTexture();
+
+    if (grainTexture) {
+      grainTexture.anisotropy = Math.min(
+        renderer.capabilities.getMaxAnisotropy(),
+        4,
+      );
+    }
 
     bookletSheets.forEach((source, sheetIndex) => {
       const geometry = new THREE.PlaneGeometry(
@@ -214,6 +478,20 @@ export function BookletSection() {
         originalY[vertex] = position.getY(vertex);
       }
 
+      const lambert = new THREE.BufferAttribute(
+        new Float32Array(position.count),
+        1,
+      );
+      lambert.setUsage(THREE.DynamicDrawUsage);
+      geometry.setAttribute("aLambert", lambert);
+
+      const bend = new THREE.BufferAttribute(
+        new Float32Array(position.count * 2),
+        2,
+      );
+      bend.setUsage(THREE.DynamicDrawUsage);
+      geometry.setAttribute("aBend", bend);
+
       const frontTexture = textureLoader.load(bookletPageSrc(source.front));
       const backTexture = textureLoader.load(bookletPageSrc(source.back));
       configureTexture(frontTexture, renderer);
@@ -230,6 +508,9 @@ export function BookletSection() {
         side: THREE.BackSide,
       });
 
+      applyPaperSurface(frontMaterial, grainTexture, "front");
+      applyPaperSurface(backMaterial, grainTexture, "back");
+
       const frontMesh = new THREE.Mesh(geometry, frontMaterial);
       const backMesh = new THREE.Mesh(geometry, backMaterial);
 
@@ -237,18 +518,101 @@ export function BookletSection() {
         backMaterial,
         backMesh,
         backTexture,
+        bend,
+        easedTurn: 0,
         frontMaterial,
         frontMesh,
         frontTexture,
         geometry,
+        lambert,
+        lambertByColumn: new Float32Array(PAGE_SEGMENTS + 1),
+        nxByColumn: new Float32Array(PAGE_SEGMENTS + 1),
+        nzByColumn: new Float32Array(PAGE_SEGMENTS + 1),
         originalX,
         originalY,
+        xByColumn: new Float32Array(PAGE_SEGMENTS + 1),
+        zByColumn: new Float32Array(PAGE_SEGMENTS + 1),
       };
 
       sheets.push(sheet);
       bookRoot.add(frontMesh, backMesh);
       deformSheet(sheet, sheetIndex, 0);
     });
+
+    /**
+     * The turning page lifts a long way off the book, so without a shadow its
+     * silhouette reads as a pasted rectangle. This projects the sheet's own bend
+     * onto the resting stack along the light direction.
+     */
+    const shadowTexture = createShadowTexture();
+    const shadowGeometry = new THREE.PlaneGeometry(
+      PAGE_SIZE,
+      PAGE_SIZE,
+      PAGE_SEGMENTS,
+      1,
+    );
+    shadowGeometry.translate(PAGE_SIZE / 2, 0, 0);
+
+    const shadowPosition = shadowGeometry.getAttribute(
+      "position",
+    ) as THREE.BufferAttribute;
+    const shadowColumn = new Uint8Array(shadowPosition.count);
+    const shadowY = new Float32Array(shadowPosition.count);
+
+    for (let vertex = 0; vertex < shadowPosition.count; vertex += 1) {
+      shadowColumn[vertex] = clamp(
+        Math.round((shadowPosition.getX(vertex) / PAGE_SIZE) * PAGE_SEGMENTS),
+        0,
+        PAGE_SEGMENTS,
+      );
+      shadowY[vertex] = shadowPosition.getY(vertex);
+    }
+
+    const shadowMaterial = new THREE.MeshBasicMaterial({
+      alphaMap: shadowTexture ?? undefined,
+      color: 0x2b2419,
+      // Depth-tested so the page hides its own shadow, but never writes depth.
+      depthWrite: false,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      transparent: true,
+    });
+    const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
+    shadowMesh.visible = false;
+    bookRoot.add(shadowMesh);
+
+    const updateShadow = (turn: number) => {
+      const index = Math.floor(turn);
+      const sheet = index >= 0 && index < SHEET_COUNT ? sheets[index] : undefined;
+      const eased = sheet?.easedTurn ?? 0;
+
+      if (!sheet || eased <= 0.002 || eased >= 0.998) {
+        shadowMesh.visible = false;
+        return;
+      }
+
+      shadowMesh.visible = true;
+      // A page held high throws a long, faint shadow; one settling back onto the
+      // stack throws a tight, dark one. Without this the standing page drops a
+      // hard slab of grey next to the spine.
+      const contact = 1 - clamp(sheet.zByColumn[PAGE_SEGMENTS] / PAGE_SIZE, 0, 1);
+      shadowMaterial.opacity =
+        SHADOW_STRENGTH * contact * Math.sin(Math.PI * eased);
+
+      for (let vertex = 0; vertex < shadowPosition.count; vertex += 1) {
+        const column = shadowColumn[vertex];
+        const lift = sheet.zByColumn[column];
+
+        shadowPosition.setXYZ(
+          vertex,
+          sheet.xByColumn[column] + lift * SHADOW_SLIDE,
+          shadowY[vertex] - lift * SHADOW_DROP,
+          SHADOW_PLANE_Z,
+        );
+      }
+
+      shadowPosition.needsUpdate = true;
+    };
 
     const updateMeta = (turn: number) => {
       const nextLabel = pageLabel(turn);
@@ -264,6 +628,7 @@ export function BookletSection() {
 
     const updateBook = (turn: number) => {
       sheets.forEach((sheet, index) => deformSheet(sheet, index, turn));
+      updateShadow(turn);
 
       const opening = smoothstep(clamp(turn, 0, 1));
       const closing = smoothstep(
@@ -271,6 +636,11 @@ export function BookletSection() {
       );
       bookRoot.position.x =
         -(PAGE_SIZE / 2) * (1 - opening) + (PAGE_SIZE / 2) * closing;
+      // Drives the width of the CSS contact shadow under the book.
+      section.style.setProperty(
+        "--book-open",
+        (opening * (1 - closing)).toFixed(3),
+      );
       updateMeta(turn);
     };
 
@@ -398,6 +768,10 @@ export function BookletSection() {
         sheet.frontTexture.dispose();
         sheet.backTexture.dispose();
       });
+      grainTexture?.dispose();
+      shadowGeometry.dispose();
+      shadowMaterial.dispose();
+      shadowTexture?.dispose();
       renderer.dispose();
     };
   }, []);
@@ -413,6 +787,8 @@ export function BookletSection() {
       <div className="booklet-pin sticky top-0 flex h-dvh flex-col justify-center px-6 sm:px-8">
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
           <div className="booklet-stage">
+            <div className="booklet-shadow" aria-hidden />
+
             <div className="booklet-viewer">
               <canvas
                 ref={canvasRef}
