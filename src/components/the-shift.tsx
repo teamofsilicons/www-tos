@@ -1,73 +1,61 @@
-"use client";
+import { createSignal, For, onCleanup, onMount } from "solid-js";
 
-import { useEffect, useRef, useState } from "react";
-
-const text =
-  "Team of silicons picks up work, brings in the right people when needed, and delivers a finished output.";
-
-const words = text.split(" ");
+const words =
+  "Team of silicons picks up work, brings in the right people when needed, and delivers a finished output.".split(
+    " ",
+  );
 
 export function TheShift() {
-  const sectionRef = useRef<HTMLElement>(null);
-  const [progress, setProgress] = useState(0);
+  let section!: HTMLElement;
+  const [progress, setProgress] = createSignal(0);
 
-  useEffect(() => {
-    const section = sectionRef.current;
-    if (!section) return;
-
-    const updateProgress = () => {
+  onMount(() => {
+    const update = () => {
       const rect = section.getBoundingClientRect();
       const vh = window.innerHeight;
       const scrollRange = section.offsetHeight - vh;
 
-      if (rect.top > vh) {
-        setProgress(0);
-        return;
-      }
-
-      if (rect.bottom < 0 || scrollRange <= 0) {
-        setProgress(1);
-        return;
-      }
+      if (rect.top > vh) return setProgress(0);
+      if (rect.bottom < 0 || scrollRange <= 0) return setProgress(1);
 
       const scrolled = Math.min(Math.max(-rect.top, 0), scrollRange);
       setProgress(scrolled / scrollRange);
     };
 
-    updateProgress();
-    window.addEventListener("scroll", updateProgress, { passive: true });
-    window.addEventListener("resize", updateProgress);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    onCleanup(() => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    });
+  });
 
-    return () => {
-      window.removeEventListener("scroll", updateProgress);
-      window.removeEventListener("resize", updateProgress);
-    };
-  }, []);
-
-  const filledWordCount = Math.ceil(progress * words.length);
+  const filled = () => Math.ceil(progress() * words.length);
 
   return (
     <section
-      ref={sectionRef}
+      ref={section}
       id="the-shift"
-      className="relative min-h-[175vh] py-8"
+      class="relative min-h-[175vh] py-8"
       aria-label="What Team of Silicons does"
     >
-      <div className="sticky top-0 flex h-dvh items-center px-8">
-        <div className="flex h-[80vh] w-full items-center rounded-xl border border-[#E7E3D8] bg-[#F6F4EC]">
-          <div className="mx-auto w-full max-w-5xl">
-            <h2 className="max-w-4xl text-2xl font-normal leading-[1.2] sm:text-3xl md:text-4xl lg:text-5xl">
-              {words.map((word, i) => (
-                <span
-                  key={`${word}-${i}`}
-                  className={`transition-colors duration-500 ${
-                    i < filledWordCount ? "text-foreground" : "text-foreground/20"
-                  }`}
-                >
-                  {word}
-                  {i < words.length - 1 ? " " : ""}
-                </span>
-              ))}
+      <div class="sticky top-0 flex h-dvh items-center px-4 sm:px-8">
+        <div class="flex h-[80vh] w-full items-center rounded-xl border border-[#E7E3D8] bg-[#F6F4EC] px-6 sm:px-10">
+          <div class="mx-auto w-full max-w-5xl">
+            <h2 class="max-w-4xl text-3xl font-normal leading-[1.2] md:text-4xl lg:text-5xl">
+              <For each={words}>
+                {(word, i) => (
+                  <span
+                    class={`transition-colors duration-500 ${
+                      i() < filled() ? "text-foreground" : "text-foreground/20"
+                    }`}
+                  >
+                    {word}
+                    {i() < words.length - 1 ? " " : ""}
+                  </span>
+                )}
+              </For>
             </h2>
           </div>
         </div>

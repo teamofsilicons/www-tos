@@ -1,21 +1,16 @@
-export function PageHeader({
-  title,
-  description,
-}: {
-  title: string;
-  description?: string;
-}) {
+import type { JSX } from "solid-js";
+
+export function PageHeader(props: { eyebrow: string; title: string; children?: JSX.Element }) {
   return (
-    <header className="border-b-[0.5px] border-border px-8 pb-8 pt-20">
-      <div className="mx-auto max-w-5xl">
-        <h1 className="font-pixel-grid text-3xl font-light tracking-tight sm:text-4xl">
-          {title}
+    <header class="px-4 pb-12 pt-32 sm:px-8 sm:pt-40">
+      <div class="mx-auto flex w-full max-w-5xl flex-col gap-5">
+        <p class="font-pixel-square text-sm uppercase tracking-tight text-muted-fg">
+          {props.eyebrow}
+        </p>
+        <h1 class="font-serif max-w-3xl text-4xl font-normal leading-[1.12] text-[#1F5CB1] md:text-5xl lg:text-6xl">
+          {props.title}
         </h1>
-        {description ? (
-          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-foreground/80">
-            {description}
-          </p>
-        ) : null}
+        {props.children}
       </div>
     </header>
   );
