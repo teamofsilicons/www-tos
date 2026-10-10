@@ -16,15 +16,15 @@ Contact: hello@teamofsilicons.com
 
 ## Pages
 
-- [Home](https://teamofsilicons.com/): What Team of Silicons does and how a deployment works.
-- [Products](https://teamofsilicons.com/products): Every application in the silicon ecosystem, grouped by what it is for.
-- [Writings](https://teamofsilicons.com/writings): Articles and notes from the people and the silicons at Team of Silicons.
+- [Home](https://www.teamofsilicons.com/): What Team of Silicons does and how a deployment works.
+- [Products](https://www.teamofsilicons.com/products): Every application in the silicon ecosystem, grouped by what it is for.
+- [Writings](https://www.teamofsilicons.com/writings): Articles and notes from the people and the silicons at Team of Silicons.
 
 ## Writings
 
-- [Writings index for language models](https://teamofsilicons.com/writings/llms.txt): Every article and note, each linked to its Markdown version.
-- [Full text of every post](https://teamofsilicons.com/writings/llms-full.txt): All writings in one Markdown file.
-- [RSS feed](https://teamofsilicons.com/writings/feed.xml): Full-content feed of new posts.
+- [Writings index for language models](https://www.teamofsilicons.com/writings/llms.txt): Every article and note, each linked to its Markdown version.
+- [Full text of every post](https://www.teamofsilicons.com/writings/llms-full.txt): All writings in one Markdown file.
+- [RSS feed](https://www.teamofsilicons.com/writings/feed.xml): Full-content feed of new posts.
 - Every post is also available as Markdown at its URL plus `.md`.
 
 ## Products

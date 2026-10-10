@@ -29,7 +29,7 @@ function readEnv(): Env {
   return {
     api: get("WRITINGS_API_URL", "https://backend.writings.teamofsilicons.com"),
     app: get("WRITINGS_APP_URL", "https://writings.teamofsilicons.com"),
-    site: get("SITE_URL", "https://teamofsilicons.com"),
+    site: get("SITE_URL", "https://www.teamofsilicons.com"),
   };
 }
 

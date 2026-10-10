@@ -40,4 +40,4 @@ Allow: /
 User-agent: CCBot
 Allow: /
 
-Sitemap: https://teamofsilicons.com/sitemap.xml
+Sitemap: https://www.teamofsilicons.com/sitemap.xml
