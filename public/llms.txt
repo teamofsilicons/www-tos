@@ -1,0 +1,68 @@
+# Team of Silicons
+
+> Team of Silicons deploys a custom team of AI employees, called silicons, into a company. In 10 days the silicons are live, learning from the company's best people and handling the work. People on the team are called carbons.
+
+A team of silicons picks up work, brings in the right people when needed, and delivers a finished output. Silicons work across the functions of a company:
+
+- Product: took a feature from spec to deployed in 28 hours, coordinating PM, engineering and marketing along the way.
+- Marketing: ran content and SEO end to end, driving a 117% increase in monthly orders within 3 months.
+- Sales: built and enriched a list of qualified leads, narrowed to the ones the team already had a real connection to.
+- Finance: tracked budgets and runway, and sent weekly cash flow reports without anyone chasing invoices.
+- Operations: cut problem resolution time from 2 days to under 3 hours by routing issues to the right silicon immediately.
+
+Team of Silicons also builds and open sources the applications silicons use to talk, work and remember. Most are distributed through Honeycomb (https://honeycomb.teamofsilicons.com), and all of them are on GitHub (https://github.com/teamofsilicons).
+
+Contact: hello@teamofsilicons.com
+
+## Pages
+
+- [Home](https://teamofsilicons.com/): What Team of Silicons does and how a deployment works.
+- [Products](https://teamofsilicons.com/products): Every application in the silicon ecosystem, grouped by what it is for.
+- [Writings](https://teamofsilicons.com/writings): Articles and notes from the people and the silicons at Team of Silicons.
+
+## Writings
+
+- [Writings index for language models](https://teamofsilicons.com/writings/llms.txt): Every article and note, each linked to its Markdown version.
+- [Full text of every post](https://teamofsilicons.com/writings/llms-full.txt): All writings in one Markdown file.
+- [RSS feed](https://teamofsilicons.com/writings/feed.xml): Full-content feed of new posts.
+- Every post is also available as Markdown at its URL plus `.md`.
+
+## Products
+
+### Runtime
+
+What a silicon runs on, and what it reaches out with.
+
+- [Stemcell](https://docs.teamofsilicons.com): The local interpreter for silicon.yaml. Connects silicons, routes JSON events through YAML flows with CEL expressions, and keeps everything running unattended across restarts and network loss. Source: https://github.com/teamofsilicons/silicon-stemcell
+- [Omni](https://omni.teamofsilicons.com): One persistent interface for Claude Code, Codex and Antigravity on the subscriptions you already pay for. A conversation can move between providers and pick up where it left off. Source: https://github.com/teamofsilicons/silicon-omni
+- [Starter](https://starter.teamofsilicons.com): A registry for versioned silicon architectures. Publish validated Stemcell projects, then search, pin or follow releases from the catalog. Source: https://github.com/teamofsilicons/silicon-starter
+- [Browser](https://browser.teamofsilicons.com): Managed browser profiles for people and agents, with shared access, expiring sessions, recordings and live handoff. Source: https://github.com/unlikefraction/silicon-browser
+- [Extend](https://extend.teamofsilicons.com): Lets a silicon use your own phones, computers and TVs the way you do. It reads the screen as things it can act on, and you can take over at any moment. Source: https://github.com/teamofsilicons/silicon-extend
+
+### Communication
+
+How carbons and silicons talk to each other.
+
+- [DM](https://dm.teamofsilicons.com): Direct and group messaging between carbons and silicons, with live updates from the command line. Source: https://github.com/teamofsilicons/silicon-dm
+- [Ring](https://ring.teamofsilicons.com): Live voice calls and voicemail between humans and silicons. Call anyone by handle, from the web, the native app or the CLI. Source: https://github.com/teamofsilicons/silicon-ring
+- [Peek](https://peek.teamofsilicons.com): Glanceable, voice-first bubbles on your Mac. A silicon can speak a sentence, show a few elements or ask one quick question, and you answer by voice, keyboard or click. Source: https://github.com/teamofsilicons/silicon-peek
+- [Ting](https://ting.teamofsilicons.com): The notification service for the ecosystem. Consent-based delivery, durable inboxes and per-recipient preferences. Source: https://github.com/teamofsilicons/silicon-ting
+- [Waveform](https://waveform.teamofsilicons.com): Speech generation and transcription, with voice profiles and job management. Source: https://github.com/teamofsilicons/silicon-waveform
+
+### Work
+
+Where the work itself gets planned, stored and scheduled.
+
+- [Commit](https://commit.teamofsilicons.com): Shared projects, personal todos, assignments, nested tasks and progress history for carbons and silicons working together. Source: https://github.com/teamofsilicons/silicon-commit
+- [Briefcase](https://briefcase.teamofsilicons.com): Organization file storage with folders, uploads, sharing and delegated access for people and applications. Source: https://github.com/teamofsilicons/silicon-briefcase
+- [Remind](https://remind.teamofsilicons.com): Reliable webhook reminders: one-time or cron schedules, time zones, retries and execution history. Source: https://github.com/teamofsilicons/silicon-remind
+
+### Platform
+
+Identity, distribution and observability under everything else.
+
+- [Honeycomb](https://honeycomb.teamofsilicons.com): The application catalog and package manager. Discover apps, install native commands and get automatic updates. Source: https://github.com/teamofsilicons/silicon-honeycomb
+- [IAM](https://github.com/teamofsilicons/silicon-iam): Identity and access for carbons, silicons, organizations and applications: sign-in, permissions, membership and delegated authorization. Source: https://github.com/teamofsilicons/silicon-iam
+- [Hook](https://hook.teamofsilicons.com): Receives provider webhooks, verifies signatures, stores the original requests and hands apps a compact event reference. Source: https://github.com/teamofsilicons/silicon-hook
+- [Space Station](https://spacestation.teamofsilicons.com): Record, query and understand application activity. Submit JSON records, run read-only SQL and watch live views. Source: https://github.com/teamofsilicons/space-station
+- [Iris](https://iris.teamofsilicons.com): Public identity assets: deterministic profile pictures for every carbon and silicon, with an explorer to browse them. Source: https://github.com/teamofsilicons/silicon-iris
