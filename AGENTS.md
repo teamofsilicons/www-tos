@@ -51,7 +51,7 @@ Environment (read at request time by the function and the dev server):
 |---|---|---|
 | `WRITINGS_API_URL` | `https://backend.writings.teamofsilicons.com` | All post data and the proxied files |
 | `WRITINGS_APP_URL` | `https://writings.teamofsilicons.com` | `runtime/v1/article.css` and `runtime/v1/writings.js` |
-| `SITE_URL` | `https://teamofsilicons.com` | Canonical URLs of the timeline and `.md` files |
+| `SITE_URL` | `https://www.teamofsilicons.com` | Canonical URLs of the timeline and `.md` files |
 
 `npm run dev` renders writings pages through the same handler (a Vite middleware in
 `vite.config.ts` using `ssrLoadModule`), so writers can preview against a local API:
