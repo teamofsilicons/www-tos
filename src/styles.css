@@ -688,10 +688,99 @@ a[href] {
 
 .wf {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: 1rem;
   padding: 1.25rem 0 0;
   border-top: 0.5px solid var(--border);
+}
+
+/* Feed icons beside the page title. */
+.wt-feeds {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.wt-feed {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  color: var(--muted-fg);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.wt-feed:hover {
+  background: var(--beige);
+  color: var(--accent);
+}
+
+/* The Filters dropdown: a <details>, so it works without JavaScript. */
+.wf-menu {
+  position: relative;
+}
+
+.wf-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.125rem;
+  padding: 0 0.75rem;
+  border: 0.5px solid #d9d2c4;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 0.875rem;
+  color: #57544c;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.wf-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.wf-toggle:hover,
+.wf-menu[open] .wf-toggle {
+  border-color: rgba(31, 92, 177, 0.35);
+  color: var(--foreground);
+}
+
+.wf-count {
+  display: grid;
+  place-items: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.6875rem;
+  line-height: 1;
+}
+
+.wf-menu .wf-form {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: min(18rem, calc(100vw - 2rem));
+  flex-direction: column;
+  align-items: stretch;
+  padding: 1rem;
+  border: 0.5px solid #d9d2c4;
+  border-radius: 0.75rem;
+  background: var(--background);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.1),
+    0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.wf-menu .wf-field input,
+.wf-menu .wf-field select {
+  width: 100%;
 }
 
 .wf-kinds {
@@ -760,6 +849,8 @@ a[href] {
 
 .wf-actions {
   display: flex;
+  justify-content: space-between;
+  flex-direction: row-reverse;
   align-items: center;
   gap: 0.75rem;
   height: 2rem;
