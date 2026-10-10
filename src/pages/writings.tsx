@@ -1,5 +1,5 @@
 import { Link, Meta } from "@solidjs/meta";
-import { For, onMount, Show } from "solid-js";
+import { For, onCleanup, onMount, Show } from "solid-js";
 import { Seo } from "~/components/seo";
 import { Timeline } from "~/components/writings-timeline";
 import { useServerData } from "~/lib/page-data";
@@ -29,12 +29,40 @@ function describe(filters: TimelineFilters, total: number) {
   return text;
 }
 
+/** How many of the dropdown's filters (dates, sort) are set, for the badge on its button. */
+function activeCount(filters: TimelineFilters) {
+  return [filters.from, filters.to, filters.sort === "asc" ? "asc" : undefined].filter(Boolean).length;
+}
+
+function FilterIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2 4h12M4.5 8h7M7 12h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+    </svg>
+  );
+}
+
 function Filters(props: { filters: TimelineFilters }) {
   let form: HTMLFormElement | undefined;
+  let menu: HTMLDetailsElement | undefined;
 
   // Without JavaScript the form submits empty fields too and the server tidies the URL with a
   // redirect. With it, leave them out so the first request is already the clean URL.
   onMount(() => {
+    // The dropdown is a <details>, so it opens without JavaScript; with it, close on Escape or a
+    // click outside.
+    const close = (event: Event) => {
+      if (!menu?.open) return;
+      if (event instanceof KeyboardEvent ? event.key === "Escape" : !menu.contains(event.target as Node)) {
+        menu.open = false;
+      }
+    };
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", close);
+    onCleanup(() => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("keydown", close);
+    });
     form?.addEventListener("submit", () => {
       for (const field of Array.from(form!.elements) as HTMLInputElement[]) {
         if (field.name && !field.value) field.disabled = true;
@@ -44,6 +72,8 @@ function Filters(props: { filters: TimelineFilters }) {
       });
     });
   });
+
+  const active = activeCount(props.filters);
 
   return (
     <div class="wf">
@@ -61,6 +91,14 @@ function Filters(props: { filters: TimelineFilters }) {
         </For>
       </nav>
 
+      <details ref={menu} class="wf-menu">
+        <summary class="wf-toggle" aria-label={active ? `Filters, ${active} set` : "Filters"}>
+          <FilterIcon />
+          <span>Filters</span>
+          <Show when={active > 0}>
+            <span class="wf-count">{active}</span>
+          </Show>
+        </summary>
       <form ref={form} method="get" action="/writings" class="wf-form" aria-label="Filter writings">
         <Show when={props.filters.kind}>
           {(kind) => <input type="hidden" name="kind" value={kind()} />}
@@ -95,6 +133,7 @@ function Filters(props: { filters: TimelineFilters }) {
           </Show>
         </div>
       </form>
+      </details>
     </div>
   );
 }
@@ -164,26 +203,30 @@ export function WritingsPage() {
               <Link rel="next" href={`${site}${timelinePath({ ...filters, page: list.page + 1 })}`} />
             </Show>
 
-            <header class="px-4 pb-10 pt-32 sm:px-8 sm:pt-40">
-              <div class="mx-auto flex w-full max-w-[680px] flex-col gap-5">
-                <p class="font-pixel-square text-sm uppercase tracking-tight text-muted-fg">Writings</p>
+            <header class="px-4 pb-8 pt-32 sm:px-8 sm:pt-40">
+              <div class="mx-auto flex w-full max-w-[680px] items-center justify-between gap-4">
                 <h1 class="font-serif text-4xl font-normal leading-[1.12] text-accent md:text-5xl">
-                  Notes on working with silicons.
+                  Writings
                 </h1>
-                <p class="text-lg leading-relaxed text-foreground/90">
-                  Articles and notes from the people and the silicons at Team of Silicons: how the
-                  work changes when AI employees join a team, where they need people, and the tools
-                  we build along the way.
-                </p>
-                <p class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-fg">
-                  <a href="/writings/feed.xml" class="wt-link">
-                    RSS feed
+                <nav class="wt-feeds" aria-label="Feeds">
+                  <a href="/writings/feed.xml" class="wt-feed" title="RSS feed" aria-label="RSS feed">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M5 19.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="currentColor" />
+                      <path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
                   </a>
-                  <a href="/writings/llms.txt" class="wt-link">
-                    llms.txt
+                  <a
+                    href="/writings/llms.txt"
+                    class="wt-feed"
+                    title="llms.txt: every post for language models. Add .md to any post's URL for its Markdown."
+                    aria-label="llms.txt for language models"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 3l1.8 4.6L18.5 9.5l-4.7 1.9L12 16l-1.8-4.6L5.5 9.5l4.7-1.9L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                      <path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor" />
+                    </svg>
                   </a>
-                  <span>Every post is also plain Markdown: add .md to its URL.</span>
-                </p>
+                </nav>
               </div>
             </header>
 
